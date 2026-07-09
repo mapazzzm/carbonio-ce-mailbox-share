@@ -1,0 +1,6 @@
+cfr-*.jar
+*.bak
+*.bak.*
+*.bak_*
+__pycache__/
+*.pyc
