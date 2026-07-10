@@ -33,7 +33,7 @@
 #
 #   python3 install.py [install|check|uninstall]
 #
-import sys, os, json, time, shutil, collections
+import sys, os, re, json, time, shutil, collections
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.environ.get("CARBONIO_ADMIN_UI", "/opt/zextras/admin/iris/carbonio-admin-ui")
@@ -125,10 +125,26 @@ def do_check():
             print("  %s: %s" % (locale_name, e))
     return installed
 
+# Marker-based removal of a PREVIOUS injection (any version) so re-running the
+# installer auto-updates an old install in place — no reliance on a "vanilla"
+# backup (which could be from an older package). The 3 removals mirror the 3
+# insertions and are anchored on the stable cuShareInto/__cuShareIntoView markers,
+# so they work for both v1 and v2 and survive minified-identifier changes.
+def strip_injection(s):
+    s = re.sub(r'__cuShareIntoView=\(\)=>\{.*?/\*__cuShareInto\*/,', '', s, count=1, flags=re.DOTALL)
+    s = re.sub(r'(?:K|ge)\.push\(\{id:[`"]cuShareInto[`"].*?\}\);',   '', s, count=1, flags=re.DOTALL)
+    s = re.sub(r',\w+===[`"]cuShareInto[`"]&&.*?\(__cuShareIntoView,\{\}\)', '', s, count=1, flags=re.DOTALL)
+    return s
+
 def apply_shell():
     s = open(SHELL, encoding="utf-8").read()
-    if MARKER in s:
-        log("shell.mjs already patched / уже пропатчен — skip"); return
+    updating = MARKER in s
+    if updating:
+        log("shell.mjs already patched — updating in place / уже пропатчен — обновляю на месте")
+        s = strip_injection(s)
+        if MARKER in s or "cuShareInto" in s:
+            die("could not remove the previous injection cleanly / не удалось убрать прошлую вставку — "
+                "restore a vanilla shell.mjs (or apt reinstall carbonio-admin-ui) and re-run")
     name, cfg = detect_variant(s)
     if not cfg:
         die("no known build anchors matched — carbonio-admin-ui build changed, "
@@ -149,7 +165,7 @@ def apply_shell():
         log("node not found — skipping syntax check / node нет, пропускаю проверку синтаксиса")
     backup(SHELL)
     os.replace(tmp, SHELL); chown_zextras(SHELL)
-    log("shell.mjs patched (%s) / пропатчен" % name)
+    log("shell.mjs %s (%s) / готово" % ("updated / обновлён" if updating else "patched / пропатчен", name))
 
 def merge_locales():
     for strings_file, locale_name in LOCALES.items():

@@ -45,7 +45,7 @@ die() { echo "ERROR / ОШИБКА: $1" >&2; exit 1; }
 for t in javac jar java; do
     [ -x "$JVM/bin/$t" ] || die "$JVM/bin/$t not found (set CARBONIO_JVM) / не найден"
 done
-command -v patch >/dev/null || die "'patch' not installed (apt-get install patch) / не установлен"
+command -v python3 >/dev/null || die "python3 not installed / не установлен"
 
 LIVE="$JARDIR/mailbox.jar"
 [ -f "$LIVE" ] || die "$LIVE not found (set CARBONIO_JARDIR) / не найден"
@@ -89,11 +89,23 @@ sed -i \
   -e 's|^\( *\)for (Map.Entry ck : cookieMap.entrySet()) {|\1for (Map.Entry<String, String> ck : cookieMap.entrySet()) {|' \
   "$WORK/src/com/zimbra/cs/service/UserServlet.java"
 
-# 4. Apply our patches
-say "Applying patches / Применяю патчи ..."
-for pf in SoapEngine.status.patch UserServlet.status.patch ShareInfo.status.patch; do
-    patch -p1 -s -d "$WORK/src" < "$HERE/../patches/$pf" || die "$pf did not apply (Carbonio version differs) / не применился (версия отличается)"
-done
+# 4. Apply our patches — SEMANTIC (regex on the logic, not context diffs), so
+#    they survive line-number/whitespace/local-variable changes across Carbonio
+#    versions, and are idempotent (an already-patched source is detected).
+say "Applying patches / Применяю патчи (семантические) ..."
+if PATCH_OUT="$(python3 "$HERE/../patches/apply_status_patches.py" "$WORK/src")"; then
+    echo "$PATCH_OUT" | sed 's/^STATUS:/  /'
+else
+    echo "$PATCH_OUT" | sed 's/^STATUS:/  /'
+    die "a patch anchor was not found — Carbonio changed the guarded logic; capture the new pattern in patches/apply_status_patches.py / анкор не найден — логика Carbonio изменилась"
+fi
+# Idempotency: if every class was ALREADY patched, the live jar needs nothing —
+# skip the (expensive) recompile/repack. Lets a re-run finish cleanly instead of
+# failing, and lets already-installed users re-run harmlessly.
+if ! echo "$PATCH_OUT" | grep -q 'STATUS:APPLIED'; then
+    say "JAR already patched — nothing to do / jar уже пропатчен — делать нечего"
+    exit 0
+fi
 
 # 5. Compile the patched classes against the live classpath
 say "Compiling / Компилирую ..."
