@@ -43,6 +43,17 @@ SHELL = os.path.join(UI_DIR, "shell.mjs")
 RUJSON = os.path.join(UI_DIR, "i18n", "ru.json")
 MARKER = "__cuShareIntoView"
 
+# Locale files to enrich with the `cushare` namespace: <strings file in repo> ->
+# <locale json name under i18n/>. English is covered by the component's inline
+# defaults, so no en.json merge is needed. Carbonio serves ONE pt.json for all
+# Portuguese incl. Brazilian (regional pt-BR browsers fall back to pt.json), so
+# a single pt.json entry covers Brazilian too. A locale is skipped if either the
+# repo strings file or the target i18n json is absent on this install.
+LOCALES = {
+    "ru.strings.json": "ru.json",
+    "pt.strings.json": "pt.json",
+}
+
 # Build variants / Варианты сборки.
 # Each: anchors (must each occur exactly once), component file, tab/branch snippets.
 VARIANTS = {
@@ -102,11 +113,16 @@ def do_check():
             print("  anchor %-9s x%d  %s" % (aname, n, tag))
     else:
         print("  анкоры ни одной версии не найдены — сборка изменилась, добавьте v3")
-    try:
-        d = json.load(open(RUJSON, encoding="utf-8"))
-        print("ru.json cushare: %s" % ("present / есть" if "cushare" in d else "missing / нет"))
-    except Exception as e:
-        print("ru.json: %s" % e)
+    for strings_file, locale_name in LOCALES.items():
+        path = os.path.join(UI_DIR, "i18n", locale_name)
+        if not os.path.exists(path):
+            print("  %s: отсутствует на этой сборке / not present — skip" % locale_name)
+            continue
+        try:
+            d = json.load(open(path, encoding="utf-8"))
+            print("  %s cushare: %s" % (locale_name, "present / есть" if "cushare" in d else "missing / нет"))
+        except Exception as e:
+            print("  %s: %s" % (locale_name, e))
     return installed
 
 def apply_shell():
@@ -135,21 +151,29 @@ def apply_shell():
     os.replace(tmp, SHELL); chown_zextras(SHELL)
     log("shell.mjs patched (%s) / пропатчен" % name)
 
-def merge_rujson():
-    add = json.load(open(os.path.join(HERE, "ru.strings.json"), encoding="utf-8"))
-    d = json.load(open(RUJSON, encoding="utf-8"), object_pairs_hook=collections.OrderedDict)
-    if d.get("cushare") == add.get("cushare"):
-        log("ru.json already has cushare / уже содержит cushare — skip"); return
-    backup(RUJSON)
-    d["cushare"] = add["cushare"]
-    json.dump(d, open(RUJSON, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    chown_zextras(RUJSON)
-    log("ru.json merged / обновлён")
+def merge_locales():
+    for strings_file, locale_name in LOCALES.items():
+        src = os.path.join(HERE, strings_file)
+        path = os.path.join(UI_DIR, "i18n", locale_name)
+        if not os.path.exists(src):
+            log("%s отсутствует в репо / missing in repo — skip" % strings_file); continue
+        if not os.path.exists(path):
+            log("%s отсутствует на сборке / not present on this build — skip" % locale_name); continue
+        add = json.load(open(src, encoding="utf-8"))
+        d = json.load(open(path, encoding="utf-8"), object_pairs_hook=collections.OrderedDict)
+        if d.get("cushare") == add.get("cushare"):
+            log("%s already has cushare / уже содержит — skip" % locale_name); continue
+        backup(path)
+        d["cushare"] = add["cushare"]
+        json.dump(d, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        chown_zextras(path)
+        log("%s merged / обновлён" % locale_name)
 
 def do_uninstall():
     # restore newest backups / восстановить свежайшие бэкапы
     import glob
-    for path in (SHELL, RUJSON):
+    targets = [SHELL] + [os.path.join(UI_DIR, "i18n", ln) for ln in LOCALES.values()]
+    for path in targets:
         bks = sorted(glob.glob(path + ".bak_cushare_*"))
         if bks:
             shutil.copy2(bks[-1], path); chown_zextras(path)
@@ -159,15 +183,15 @@ def do_uninstall():
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "install"
-    for p in (SHELL, RUJSON):
-        if not os.path.exists(p): die("%s not found (set CARBONIO_ADMIN_UI) / не найден" % p)
+    if not os.path.exists(SHELL):
+        die("%s not found (set CARBONIO_ADMIN_UI) / не найден" % SHELL)
     if mode == "check":
         do_check()
     elif mode == "uninstall":
         do_uninstall()
         print("\nRU: обновите страницу админки. EN: reload the admin UI.")
     elif mode == "install":
-        apply_shell(); merge_rujson()
+        apply_shell(); merge_locales()
         print("\nRU: Готово. Обновите страницу админки (Ctrl+F5).")
         print("EN: Done. Hard-reload the admin UI (Ctrl+F5).")
     else:
