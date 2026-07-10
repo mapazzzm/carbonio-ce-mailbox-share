@@ -11,16 +11,25 @@
 #     sections — "mailboxes added to this one" and "who has access to this one" —
 #     with Add/Edit/Remove, rwixd rights, sendAs, e-mail/name search and auto-mountpoint.
 #
-# RU: ВНИМАНИЕ: JS-компонент завязан на минифицированные имена конкретной сборки
-#     carbonio-admin-ui. Если анкоры не найдены — версия отличается, адаптируйте их
-#     под свой shell.mjs. JAR-часть (jar/) версионно-устойчива, это относится только к UI.
-# EN: NOTE: the JS component depends on the minified identifiers of a specific
-#     carbonio-admin-ui build. If an anchor is not found, your build differs — adapt
-#     the anchors to your shell.mjs. The JAR part (jar/) is version-robust; this caveat
-#     is UI-only.
+# RU: ДВЕ ВЕРСИИ СБОРКИ. JS-компонент завязан на минифицированные имена конкретной
+#     сборки carbonio-admin-ui, а они меняются между версиями:
+#       v1 — admin-console-ui 0.12.x (CE 26.3): component.js, анкоры EFe/ai(J2)/ike.
+#       v2 — admin-console-ui 0.13.x (CE 26.6, Vite): component_v2.js, анкоры K/v/Nde.
+#     Инсталлятор сам определяет версию по содержимому shell.mjs. Если ни один набор
+#     анкоров не подошёл — сборка снова изменилась, снимите новые имена и добавьте v3.
+#     JAR-часть (jar/) версионно-устойчива — это касается только UI.
+# EN: TWO BUILD VARIANTS. The JS component depends on the minified identifiers of a
+#     specific carbonio-admin-ui build, which change across versions:
+#       v1 — admin-console-ui 0.12.x (CE 26.3): component.js, anchors EFe/ai(J2)/ike.
+#       v2 — admin-console-ui 0.13.x (CE 26.6, Vite): component_v2.js, anchors K/v/Nde.
+#     The installer auto-detects the variant from shell.mjs. If neither anchor set
+#     matches, the build changed again — capture the new identifiers and add v3.
+#     The JAR part (jar/) is version-robust; this caveat is UI-only.
 #
-# RU: Переприменять после `apt upgrade carbonio-admin-ui`.
-# EN: Re-run after `apt upgrade carbonio-admin-ui`.
+# RU: Работает на Ubuntu 22.04 и 24.04 (нужен только python3 и, желательно, node
+#     для проверки синтаксиса). Переприменять после `apt upgrade carbonio-admin-ui`.
+# EN: Works on Ubuntu 22.04 and 24.04 (needs only python3, plus node for the optional
+#     syntax check). Re-run after `apt upgrade carbonio-admin-ui`.
 #
 #   python3 install.py [install|check|uninstall]
 #
@@ -29,16 +38,35 @@ import sys, os, json, time, shutil, collections
 HERE = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.environ.get("CARBONIO_ADMIN_UI", "/opt/zextras/admin/iris/carbonio-admin-ui")
 SHELL = os.path.join(UI_DIR, "shell.mjs")
+# i18n dir differs across builds: 0.12.x had ./i18n/ru.json inside the UI dir;
+# 0.13.x symlinks ./i18n -> /opt/zextras/admin/iris/i18n. Both resolve via UI_DIR.
 RUJSON = os.path.join(UI_DIR, "i18n", "ru.json")
 MARKER = "__cuShareIntoView"
 
-# Anchors (build-specific) / Анкоры (зависят от сборки)
-A_COMP = "},EFe=()=>{const n=ai(J2)"
-A_TAB  = 'be&&ge.push({id:"delegates",label:P("label.delegates","DELEGATES").toLocaleUpperCase(),CustomComponent:et});'
-A_BR   = "q===ike&&t.jsx(EFe,{})"
-
-TAB_ADD = 'ge.push({id:"cuShareInto",label:P("cushare.into_tab","Access").toLocaleUpperCase(),CustomComponent:et});'
-BR_ADD  = ',q==="cuShareInto"&&t.jsx(__cuShareIntoView,{})'
+# Build variants / Варианты сборки.
+# Each: anchors (must each occur exactly once), component file, tab/branch snippets.
+VARIANTS = {
+    "v1": {  # admin-console-ui 0.12.x (CE 26.3)
+        "component": "component.js",
+        "A_COMP": "},EFe=()=>{const n=ai(J2)",
+        "A_TAB":  'be&&ge.push({id:"delegates",label:P("label.delegates","DELEGATES").toLocaleUpperCase(),CustomComponent:et});',
+        "A_BR":   "q===ike&&t.jsx(EFe,{})",
+        # component is spliced into the same comma-let chain, right before EFe
+        "COMP_REPL": lambda comp, A: "}," + comp + ",EFe=()=>{const n=ai(J2)",
+        "TAB_ADD": 'ge.push({id:"cuShareInto",label:P("cushare.into_tab","Access").toLocaleUpperCase(),CustomComponent:et});',
+        "BR_ADD":  ',q==="cuShareInto"&&t.jsx(__cuShareIntoView,{})',
+    },
+    "v2": {  # admin-console-ui 0.13.x (CE 26.6, Vite)
+        "component": "component_v2.js",
+        # inject the component into the `let G=...,K=[...]` chain, right before K
+        "A_COMP": "K=[{id:`general`,label:m(`label.general`,`GENERAL`),CustomComponent:G}",
+        "A_TAB":  "A&&K.push({id:`delegates`,label:m(`label.delegates`,`DELEGATES`).toLocaleUpperCase(),CustomComponent:G});",
+        "A_BR":   "v===`delegates`&&(0,Z.jsx)(Nde,{})",
+        "COMP_REPL": lambda comp, A: comp + "," + A,
+        "TAB_ADD": "K.push({id:`cuShareInto`,label:m(`cushare.into_tab`,`Access`).toLocaleUpperCase(),CustomComponent:G});",
+        "BR_ADD":  ",v===`cuShareInto`&&(0,Z.jsx)(__cuShareIntoView,{})",
+    },
+}
 
 def log(msg): print(">> " + msg)
 def die(msg): print("ERROR / ОШИБКА: " + msg, file=sys.stderr); sys.exit(1)
@@ -54,14 +82,26 @@ def chown_zextras(path):
     except Exception:
         pass  # not fatal when testing off-box / не критично вне сервера
 
+def detect_variant(s):
+    """Return (name, cfg) of the build whose anchors are all present exactly once."""
+    for name, cfg in VARIANTS.items():
+        if all(s.count(cfg[a]) == 1 for a in ("A_COMP", "A_TAB", "A_BR")):
+            return name, cfg
+    return None, None
+
 def do_check():
     s = open(SHELL, encoding="utf-8").read()
     installed = MARKER in s
+    name, cfg = detect_variant(s)
     print("shell.mjs: %s" % ("INSTALLED / УСТАНОВЛЕН" if installed else "not installed / не установлен"))
-    for name, a in (("component", A_COMP), ("tab", A_TAB), ("branch", A_BR)):
-        n = s.count(a)
-        tag = "ok" if n == 1 else ("N/A after install" if installed else "MISSING / НЕ НАЙДЕН")
-        print("  anchor %-9s x%d  %s" % (name, n, tag))
+    print("build variant / вариант сборки: %s" % (name or "UNKNOWN / НЕИЗВЕСТЕН"))
+    if cfg:
+        for aname, key in (("component", "A_COMP"), ("tab", "A_TAB"), ("branch", "A_BR")):
+            n = s.count(cfg[key])
+            tag = "ok" if n == 1 else ("N/A after install" if installed else "MISSING / НЕ НАЙДЕН")
+            print("  anchor %-9s x%d  %s" % (aname, n, tag))
+    else:
+        print("  анкоры ни одной версии не найдены — сборка изменилась, добавьте v3")
     try:
         d = json.load(open(RUJSON, encoding="utf-8"))
         print("ru.json cushare: %s" % ("present / есть" if "cushare" in d else "missing / нет"))
@@ -73,24 +113,27 @@ def apply_shell():
     s = open(SHELL, encoding="utf-8").read()
     if MARKER in s:
         log("shell.mjs already patched / уже пропатчен — skip"); return
-    comp = open(os.path.join(HERE, "component.js"), encoding="utf-8").read().strip()
-    for name, a in (("component", A_COMP), ("tab", A_TAB), ("branch", A_BR)):
-        if s.count(a) != 1:
-            die("anchor '%s' found %d times (expected 1) — build differs, adapt anchors / версия отличается"
-                % (name, s.count(a)))
-    s = s.replace(A_COMP, "}," + comp + ",EFe=()=>{const n=ai(J2)", 1)
-    s = s.replace(A_TAB, A_TAB + TAB_ADD, 1)
-    s = s.replace(A_BR, A_BR + BR_ADD, 1)
+    name, cfg = detect_variant(s)
+    if not cfg:
+        die("no known build anchors matched — carbonio-admin-ui build changed, "
+            "capture new identifiers and add a variant / сборка изменилась")
+    log("detected build / определена сборка: " + name)
+    comp = open(os.path.join(HERE, cfg["component"]), encoding="utf-8").read().strip()
+    s = s.replace(cfg["A_COMP"], cfg["COMP_REPL"](comp, cfg["A_COMP"]), 1)
+    s = s.replace(cfg["A_TAB"], cfg["A_TAB"] + cfg["TAB_ADD"], 1)
+    s = s.replace(cfg["A_BR"], cfg["A_BR"] + cfg["BR_ADD"], 1)
     # syntax sanity if node is available / проверка синтаксиса, если есть node
-    # tmp must end in .mjs so node --check parses it as an ES module / иначе node трактует как CommonJS
+    # tmp must end in .mjs so node --check parses it as an ES module / иначе CommonJS
     tmp = SHELL + ".cushare_tmp.mjs"
     open(tmp, "w", encoding="utf-8").write(s)
     if shutil.which("node"):
         if os.system("node --check '%s' >/dev/null 2>&1" % tmp) != 0:
             os.remove(tmp); die("patched shell.mjs failed node --check / синтаксис не прошёл")
+    else:
+        log("node not found — skipping syntax check / node нет, пропускаю проверку синтаксиса")
     backup(SHELL)
     os.replace(tmp, SHELL); chown_zextras(SHELL)
-    log("shell.mjs patched / пропатчен")
+    log("shell.mjs patched (%s) / пропатчен" % name)
 
 def merge_rujson():
     add = json.load(open(os.path.join(HERE, "ru.strings.json"), encoding="utf-8"))
