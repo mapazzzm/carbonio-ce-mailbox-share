@@ -42,6 +42,10 @@
   "revoked_ok": "Acesso revogado",
   "granted_ok": "Acesso concedido",
   "enter_user": "Informe o e-mail do usuário",
-  "sa_short": "Enviar em nome"
+  "sa_short": "Enviar em nome",
+  "expiry_never": "Acesso permanente",
+  "expiry_until": "Acesso até:",
+  "expiry_hint": "O acesso é removido automaticamente no fim do dia indicado — incluindo o envio em nome.",
+  "until_prefix": "até "
  }
 }

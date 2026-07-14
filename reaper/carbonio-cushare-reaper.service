@@ -1,0 +1,17 @@
+# carbonio-cushare-reaper — oneshot, driven by carbonio-cushare-reaper.timer.
+# Revokes orphaned sendAs + removes the delegate's mountpoint once the matching
+# time-limited folder grant (from the admin "Access" tab) has expired.
+[Unit]
+Description=Carbonio Access-tab time-limited sendAs janitor
+After=network.target carbonio-appserver.target
+Wants=carbonio-appserver.target
+
+[Service]
+Type=oneshot
+User=zextras
+Group=zextras
+Environment=HOME=/opt/zextras
+Environment=PATH=/opt/zextras/bin:/opt/zextras/common/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 /usr/local/bin/carbonio-cushare-reaper.py
+# Never let a bad run mark the unit failed and spam the journal.
+SuccessExitStatus=0

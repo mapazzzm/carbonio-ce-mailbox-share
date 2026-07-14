@@ -1,0 +1,16 @@
+# Runs the sendAs janitor every 30 minutes. Folder access itself is revoked
+# instantly & natively by Carbonio at the exact expiry — this timer only trails
+# it to drop the non-native sendAs + the now-dead mountpoint, so a coarse cadence
+# is fine (and each run launches a handful of short-lived zmprov/zmsoap JVMs, so
+# a coarse cadence is also the polite choice). Tune OnUnitActiveSec to taste.
+[Unit]
+Description=Run the Carbonio Access-tab sendAs janitor periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=true
+Unit=carbonio-cushare-reaper.service
+
+[Install]
+WantedBy=timers.target

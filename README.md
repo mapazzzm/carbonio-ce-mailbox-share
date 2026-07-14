@@ -3,16 +3,16 @@
 [<sup>ru</sup> Русский](#русский) | [<sup>en</sup> English](#english)
 
 Управление общим доступом к почтовым ящикам прямо в **carbonio-admin-ui**: вкладка «Доступ» в свойствах
-ящика (права `rwixd`, «отправка от имени», поиск по email/ФИО, авто-подключение) **плюс** серверный патч,
-который позволяет давать доступ к почте ящиков в статусе **«Закрыто»** и **«Заблокировано»** — не открывая
-их (сценарий уволенного сотрудника).
+ящика (права `rwixd`, «отправка от имени», поиск по email/ФИО, авто-подключение, **доступ «на срок»**) **плюс**
+серверный патч, который позволяет давать доступ к почте ящиков в статусе **«Закрыто»** и **«Заблокировано»** —
+не открывая их (сценарий уволенного сотрудника).
 
 Manage mailbox sharing right inside **carbonio-admin-ui**: an "Access" tab in the mailbox properties
-(`rwixd` rights, "send as", e-mail/name search, auto-mountpoint) **plus** a backend patch that lets you
-grant access to mail of **closed** and **locked** mailboxes without re-activating them (the "former
-employee" case).
+(`rwixd` rights, "send as", e-mail/name search, auto-mountpoint, **time-limited access**) **plus** a backend
+patch that lets you grant access to mail of **closed** and **locked** mailboxes without re-activating them
+(the "former employee" case).
 
-Протестировано на / Tested on **Carbonio CE 26.x** (`carbonio-admin-ui`, `mailbox.jar` from `carbonio-appserver`, Ubuntu Noble, JDK 21).
+Протестировано на / Tested on **Carbonio CE 26.3 и 26.6** (`carbonio-admin-ui` 0.12.x/0.13.x, `mailbox.jar` from `carbonio-appserver`, Ubuntu 22.04/24.04, JDK 21).
 
 ---
 
@@ -29,6 +29,11 @@ employee" case).
   `sn`, `givenName`, `uid`), авто-создание **mountpoint** (ящик появляется у пользователя сам).
 - **Доступ к закрытым/заблокированным ящикам.** «Отправка от имени» для них автоматически недоступна
   (от закрытого ящика слать нельзя).
+- **Доступ «на срок».** В форме — галочка **«Бессрочный доступ»** (по умолчанию включена); сняв её, можно
+  выбрать **дату**, до которой доступ действует. По истечении Carbonio **сам** перестаёт пускать делегата
+  (нативный `expiry` у folder-гранта), а фоновый уборщик снимает «отправку от имени» и убирает подключённый
+  ящик. Уже выданные доступы считаются бессрочными и в любой момент правятся через **«Изменить»** (можно менять
+  и права, и срок). Сценарий: замещающему на 25 дней отпуска — доступ к ящику ушедшего, дальше сам исчезает.
 - Интерфейс двуязычный: русский при русской локали Carbonio, английский при любой другой.
 
 ### Проблема, которую решает бэкенд-патч
@@ -64,6 +69,17 @@ Carbonio (наследие Zimbra) жёстко запрещает **делег�
 патч (`patches/*.status.patch`), затронутые классы перекомпилируются и кладутся обратно в jar. **Исходники
 Carbonio не распространяются** — декомпилируется ваш собственный jar.
 
+### Как истекает доступ «на срок»
+
+Срок хранится в **нативном** атрибуте `expiry` folder-гранта Carbonio: доступ к папкам снимает **сам сервер**
+точно в срок — без нашего кода. Но у права «отправка от имени» (`sendAs`) нативного срока нет, поэтому проект
+ставит крошечный **systemd-таймер** `carbonio-cushare-reaper.timer` (`reaper/`, каждые 10 мин, от пользователя
+`zextras`). Уборщик **без состояния** — единственный источник правды — сам ACL. Он снимает `sendAs` и удаляет
+подключённый ящик только когда у делегата **есть** точка монтирования на владельца, но активного гранта в ACL
+владельца **уже нет** (= доступ истёк). Нет точки монтирования → это ручной/давний `sendAs`, он **не трогается**;
+бессрочные шары (`expiry=0`) не трогаются никогда. Общается с Carbonio через локальные `zmprov`/`zmsoap` —
+отдельный HTTP-сервис или sidecar **не нужен** (проект самодостаточен).
+
 ### Установка
 
 Одной строкой — склонирует, поставит обе части и перезапустит mailbox:
@@ -81,6 +97,7 @@ git clone https://github.com/mapazzzm/carbonio-ce-mailbox-share && cd carbonio-c
 sudo bash jar/install-jar.sh          # только бэкенд
 python3 admin-ui/install.py install   # только вкладка админки
 python3 admin-ui/install.py check     # диагностика: применён ли UI-патч, найдены ли анкоры
+sudo bash reaper/install-reaper.sh    # только уборщик sendAs (systemd-таймер)
 ```
 
 ### Откат
@@ -93,6 +110,10 @@ sudo ./uninstall.sh            # обе части из бэкапов, зате
 
 - `apt upgrade carbonio-appserver` перезаписывает `mailbox.jar` → повторите `jar/install-jar.sh` + рестарт.
 - `apt upgrade carbonio-admin-ui` перезаписывает `shell.mjs`/`ru.json` → повторите `admin-ui/install.py install`.
+- Уборщик `sendAs` **не слетает** при `apt upgrade` (свои файлы вне пакетов Carbonio). После `git pull`
+  достаточно `sudo bash reaper/install-reaper.sh` (идемпотентно). **Обновление с прошлой версии проекта:**
+  `git pull && sudo ./install.sh` — вкладка обновляется на месте (`install.py` умеет замену), уборщик
+  доустанавливается. Ранее выданные доступы остаются бессрочными.
 
 > ⚠️ **Про UI-часть.** React-компонент завязан на **минифицированные имена конкретной сборки**
 > `carbonio-admin-ui`. Если `install.py` пишет, что анкор не найден, — ваша сборка отличается; поправьте
@@ -119,6 +140,11 @@ sudo ./uninstall.sh            # обе части из бэкапов, зате
   and automatic **mountpoint** creation (the mailbox shows up for the grantee by itself).
 - **Access to closed/locked mailboxes.** "Send As" is disabled for them automatically (you cannot send from a
   closed mailbox).
+- **Time-limited access.** The form has an **"Indefinite access"** checkbox (on by default); clear it to pick a
+  **date** through which the access is valid. When it passes, Carbonio itself stops letting the delegate in (the
+  native folder-grant `expiry`), and a background janitor revokes "Send As" and removes the mounted mailbox.
+  Existing grants count as indefinite and can be changed anytime via **Edit** (both rights and the deadline).
+  Use case: give a stand-in 25 days of access to a colleague on vacation; it then disappears on its own.
 - Bilingual UI: Russian on a Russian Carbonio locale, English otherwise.
 
 ### The problem the backend patch solves
@@ -153,6 +179,17 @@ Your **locally installed** `mailbox.jar` is decompiled (CFR), a small source pat
 is applied, the touched classes are recompiled and put back into the jar. **No Carbonio source is
 redistributed** — your own jar is decompiled on your machine.
 
+### How time-limited access expires
+
+The deadline lives in Carbonio's **native** folder-grant `expiry` attribute: folder access is removed by the
+**server itself**, exactly on time, with no code of ours. The "Send As" right (`sendAs`) has no native expiry,
+so the project installs a tiny **systemd timer** `carbonio-cushare-reaper.timer` (`reaper/`, every 10 min, as
+the `zextras` user). The janitor is **stateless** — the only source of truth is the ACL itself. It revokes
+`sendAs` and removes the mounted mailbox only when the delegate **has** a mountpoint to the owner but the
+owner's ACL **no longer** holds an active grant for them (= access expired). No mountpoint → a manual/legacy
+`sendAs`, **left alone**; indefinite shares (`expiry=0`) are never touched. It talks to Carbonio via the local
+`zmprov`/`zmsoap` — **no** separate HTTP service or sidecar is needed (the project is self-contained).
+
 ### Install
 
 One line — clones, installs both parts and restarts the mailbox:
@@ -170,6 +207,7 @@ Parts can be installed separately:
 sudo bash jar/install-jar.sh          # backend only
 python3 admin-ui/install.py install   # admin tab only
 python3 admin-ui/install.py check     # diagnostics: is the UI patch applied, are anchors present
+sudo bash reaper/install-reaper.sh    # sendAs janitor only (systemd timer)
 ```
 
 ### Uninstall
@@ -182,6 +220,10 @@ sudo ./uninstall.sh            # both parts from backups, then restart the mailb
 
 - `apt upgrade carbonio-appserver` overwrites `mailbox.jar` → re-run `jar/install-jar.sh` + restart.
 - `apt upgrade carbonio-admin-ui` overwrites `shell.mjs`/`ru.json` → re-run `admin-ui/install.py install`.
+- The `sendAs` janitor is **not** affected by `apt upgrade` (its files live outside Carbonio packages). After a
+  `git pull`, refresh it with `sudo bash reaper/install-reaper.sh` (idempotent). **Upgrading from an earlier
+  version of this project:** `git pull && sudo ./install.sh` — the tab updates in place (`install.py` supports
+  replacement) and the janitor is installed. Previously granted access stays indefinite.
 
 > ⚠️ **About the UI part.** The React component depends on the **minified identifiers of a specific
 > `carbonio-admin-ui` build**. If `install.py` reports a missing anchor, your build differs — adapt the anchors

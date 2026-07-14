@@ -2,8 +2,10 @@
 #
 # carbonio-ce-mailbox-share — full installer / полный инсталлятор
 # ==============================================================
-# RU: Ставит обе части — JAR-патч (бэкенд) и вкладку «Доступ» в админке (UI).
-# EN: Installs both parts — the JAR patch (backend) and the "Access" admin UI tab.
+# RU: Ставит три части — JAR-патч (бэкенд), вкладку «Доступ» в админке (UI) и
+#     уборщик sendAs для доступа «на срок» (systemd-таймер).
+# EN: Installs three parts — the JAR patch (backend), the "Access" admin UI tab,
+#     and the sendAs janitor for time-limited access (a systemd timer).
 #
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -12,11 +14,14 @@ echo "=============================================================="
 echo " carbonio-ce-mailbox-share — install / установка"
 echo "=============================================================="
 
-echo; echo ">> [1/2] JAR patch (backend) / JAR-патч (бэкенд)"
+echo; echo ">> [1/3] JAR patch (backend) / JAR-патч (бэкенд)"
 bash "$HERE/jar/install-jar.sh"
 
-echo; echo ">> [2/2] Admin UI tab / вкладка админки"
+echo; echo ">> [2/3] Admin UI tab / вкладка админки"
 python3 "$HERE/admin-ui/install.py" install
+
+echo; echo ">> [3/3] Time-limited-access sendAs janitor / уборщик срочного доступа (sendAs)"
+bash "$HERE/reaper/install-reaper.sh"
 
 # RU: Рестарт mailbox для загрузки пропатченных классов (пропустить: NO_RESTART=1).
 # EN: Restart the mailbox to load the patched classes (skip with NO_RESTART=1).

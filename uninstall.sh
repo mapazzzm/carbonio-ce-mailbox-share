@@ -6,10 +6,13 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-echo ">> [1/2] Admin UI tab / вкладка админки"
+echo ">> [1/3] Time-limited-access sendAs janitor / уборщик срочного доступа"
+bash "$HERE/reaper/uninstall-reaper.sh"
+
+echo; echo ">> [2/3] Admin UI tab / вкладка админки"
 python3 "$HERE/admin-ui/install.py" uninstall
 
-echo; echo ">> [2/2] JAR patch (backend) / JAR-патч (бэкенд)"
+echo; echo ">> [3/3] JAR patch (backend) / JAR-патч (бэкенд)"
 bash "$HERE/jar/uninstall-jar.sh"
 
 cat <<'EOF'
