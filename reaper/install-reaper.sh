@@ -40,10 +40,10 @@ sudo -u zextras HOME=/opt/zextras PATH=/opt/zextras/bin:/opt/zextras/common/bin:
 
 cat <<'EOF'
 
-RU: Готово. Таймер carbonio-cushare-reaper.timer запускает уборщик каждые 10 мин.
+RU: Готово. Таймер carbonio-cushare-reaper.timer запускает уборщик каждые 30 мин.
     Логи:   journalctl -u carbonio-cushare-reaper.service
     Ручной прогон (без изменений): sudo -u zextras /usr/local/bin/carbonio-cushare-reaper.py --dry-run
-EN: Done. The carbonio-cushare-reaper.timer runs the janitor every 10 min.
+EN: Done. The carbonio-cushare-reaper.timer runs the janitor every 30 min.
     Logs:   journalctl -u carbonio-cushare-reaper.service
     Manual dry-run: sudo -u zextras /usr/local/bin/carbonio-cushare-reaper.py --dry-run
 EOF

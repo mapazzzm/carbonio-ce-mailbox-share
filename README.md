@@ -73,7 +73,7 @@ Carbonio не распространяются** — декомпилирует�
 
 Срок хранится в **нативном** атрибуте `expiry` folder-гранта Carbonio: доступ к папкам снимает **сам сервер**
 точно в срок — без нашего кода. Но у права «отправка от имени» (`sendAs`) нативного срока нет, поэтому проект
-ставит крошечный **systemd-таймер** `carbonio-cushare-reaper.timer` (`reaper/`, каждые 10 мин, от пользователя
+ставит крошечный **systemd-таймер** `carbonio-cushare-reaper.timer` (`reaper/`, каждые 30 мин, от пользователя
 `zextras`). Уборщик **без состояния** — единственный источник правды — сам ACL. Он снимает `sendAs` и удаляет
 подключённый ящик только когда у делегата **есть** точка монтирования на владельца, но активного гранта в ACL
 владельца **уже нет** (= доступ истёк). Нет точки монтирования → это ручной/давний `sendAs`, он **не трогается**;
@@ -183,7 +183,7 @@ redistributed** — your own jar is decompiled on your machine.
 
 The deadline lives in Carbonio's **native** folder-grant `expiry` attribute: folder access is removed by the
 **server itself**, exactly on time, with no code of ours. The "Send As" right (`sendAs`) has no native expiry,
-so the project installs a tiny **systemd timer** `carbonio-cushare-reaper.timer` (`reaper/`, every 10 min, as
+so the project installs a tiny **systemd timer** `carbonio-cushare-reaper.timer` (`reaper/`, every 30 min, as
 the `zextras` user). The janitor is **stateless** — the only source of truth is the ACL itself. It revokes
 `sendAs` and removes the mounted mailbox only when the delegate **has** a mountpoint to the owner but the
 owner's ACL **no longer** holds an active grant for them (= access expired). No mountpoint → a manual/legacy
