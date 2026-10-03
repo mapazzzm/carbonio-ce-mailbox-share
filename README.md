@@ -12,7 +12,7 @@ Manage mailbox sharing right inside **carbonio-admin-ui**: an "Access" tab in th
 patch that lets you grant access to mail of **closed** and **locked** mailboxes without re-activating them
 (the "former employee" case).
 
-Протестировано на / Tested on **Carbonio CE 26.3 и 26.6** (`carbonio-admin-ui` 0.12.x/0.13.x, `mailbox.jar` from `carbonio-appserver`, Ubuntu 22.04/24.04, JDK 21).
+Протестировано на / Tested on **Carbonio CE 26.3, 26.6 и сборке с `carbonio-admin-ui` 0.15.2** (`carbonio-admin-ui` 0.12.x / 0.13.x / 0.15.x, `mailbox.jar` from `carbonio-appserver`, Ubuntu 22.04/24.04, JDK 21).
 
 ---
 
@@ -116,9 +116,11 @@ sudo ./uninstall.sh            # обе части из бэкапов, зате
   доустанавливается. Ранее выданные доступы остаются бессрочными.
 
 > ⚠️ **Про UI-часть.** React-компонент завязан на **минифицированные имена конкретной сборки**
-> `carbonio-admin-ui`. Если `install.py` пишет, что анкор не найден, — ваша сборка отличается; поправьте
-> анкоры (`A_COMP`/`A_TAB`/`A_BR` в `admin-ui/install.py`) и минифицированные псевдонимы в `component.js`
-> под свой `shell.mjs`. JAR-часть версионно-устойчива (патч исходника), это ограничение касается только UI.
+> `carbonio-admin-ui`. Поддерживаются три варианта, `install.py` выбирает нужный сам: v1 — 0.12.x
+> (`component.js`), v2 — 0.13.x (`component_v2.js`), v3 — 0.15.x (`component_v3.js`). Если `install.py`
+> пишет, что анкор не найден, — ваша сборка новее; добавьте вариант: снимите анкоры (`A_COMP`/`A_TAB`/`A_BR`
+> в `admin-ui/install.py`) и минифицированные псевдонимы (контекст аккаунта, `useTranslation`, snackbar, SOAP-обёртка,
+> поиск, Button, Checkbox, React/jsx) под свой `shell.mjs`. JAR-часть версионно-устойчива (патч исходника), это ограничение касается только UI.
 
 ### Требования
 
@@ -226,9 +228,11 @@ sudo ./uninstall.sh            # both parts from backups, then restart the mailb
   replacement) and the janitor is installed. Previously granted access stays indefinite.
 
 > ⚠️ **About the UI part.** The React component depends on the **minified identifiers of a specific
-> `carbonio-admin-ui` build**. If `install.py` reports a missing anchor, your build differs — adapt the anchors
-> (`A_COMP`/`A_TAB`/`A_BR` in `admin-ui/install.py`) and the minified aliases in `component.js` to your
-> `shell.mjs`. The JAR part is version-robust (source patch); this caveat is UI-only.
+> `carbonio-admin-ui` build**. Three variants are supported and auto-detected by `install.py`: v1 — 0.12.x
+> (`component.js`), v2 — 0.13.x (`component_v2.js`), v3 — 0.15.x (`component_v3.js`). If `install.py` reports a
+> missing anchor, your build is newer — add a variant: capture the anchors (`A_COMP`/`A_TAB`/`A_BR` in
+> `admin-ui/install.py`) and the minified aliases (account context, `useTranslation`, snackbar, SOAP wrapper,
+> directory search, Button, Checkbox, React/jsx) from your `shell.mjs`. The JAR part is version-robust (source patch); this caveat is UI-only.
 
 ### Requirements
 
