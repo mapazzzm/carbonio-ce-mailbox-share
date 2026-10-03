@@ -16,14 +16,15 @@
 #       v1 — admin-console-ui 0.12.x (CE 26.3): component.js, анкоры EFe/ai(J2)/ike.
 #       v2 — admin-console-ui 0.13.x (CE 26.6, Vite): component_v2.js, анкоры K/v/Nde.
 #     Инсталлятор сам определяет версию по содержимому shell.mjs. Если ни один набор
-#     анкоров не подошёл — сборка снова изменилась, снимите новые имена и добавьте v3.
+#     анкоров не подошёл — сборка снова изменилась, снимите новые имена и добавьте v4.
+#       v3 — admin-console-ui 0.15.x: component_v3.js, анкоры H/V/_fe.
 #     JAR-часть (jar/) версионно-устойчива — это касается только UI.
 # EN: TWO BUILD VARIANTS. The JS component depends on the minified identifiers of a
 #     specific carbonio-admin-ui build, which change across versions:
 #       v1 — admin-console-ui 0.12.x (CE 26.3): component.js, anchors EFe/ai(J2)/ike.
 #       v2 — admin-console-ui 0.13.x (CE 26.6, Vite): component_v2.js, anchors K/v/Nde.
 #     The installer auto-detects the variant from shell.mjs. If neither anchor set
-#     matches, the build changed again — capture the new identifiers and add v3.
+#     matches, the build changed again — capture the new identifiers and add v4.
 #     The JAR part (jar/) is version-robust; this caveat is UI-only.
 #
 # RU: Работает на Ubuntu 22.04 и 24.04 (нужен только python3 и, желательно, node
@@ -77,6 +78,15 @@ VARIANTS = {
         "TAB_ADD": "K.push({id:`cuShareInto`,label:m(`cushare.into_tab`,`Access`).toLocaleUpperCase(),CustomComponent:G});",
         "BR_ADD":  ",v===`cuShareInto`&&(0,Z.jsx)(__cuShareIntoView,{})",
     },
+    "v3": {  # admin-console-ui 0.15.x (Vite): React=Y, jsx=X, ctx Y6, SOAP HL, search U6
+        "component": "component_v3.js",
+        "A_COMP": "H=[{id:`general`,label:m(`label.general`,`GENERAL`),CustomComponent:V}",
+        "A_TAB":  "D&&H.push({id:`delegates`,label:m(`label.delegates`,`DELEGATES`).toLocaleUpperCase(),CustomComponent:V});",
+        "A_BR":   "_===`delegates`&&(0,X.jsx)(_fe,{})",
+        "COMP_REPL": lambda comp, A: comp + "," + A,
+        "TAB_ADD": "H.push({id:`cuShareInto`,label:m(`cushare.into_tab`,`Access`).toLocaleUpperCase(),CustomComponent:V});",
+        "BR_ADD":  ",_===`cuShareInto`&&(0,X.jsx)(__cuShareIntoView,{})",
+    },
 }
 
 def log(msg): print(">> " + msg)
@@ -112,7 +122,7 @@ def do_check():
             tag = "ok" if n == 1 else ("N/A after install" if installed else "MISSING / НЕ НАЙДЕН")
             print("  anchor %-9s x%d  %s" % (aname, n, tag))
     else:
-        print("  анкоры ни одной версии не найдены — сборка изменилась, добавьте v3")
+        print("  анкоры ни одной версии не найдены — сборка изменилась, добавьте v4")
     for strings_file, locale_name in LOCALES.items():
         path = os.path.join(UI_DIR, "i18n", locale_name)
         if not os.path.exists(path):
@@ -132,7 +142,7 @@ def do_check():
 # so they work for both v1 and v2 and survive minified-identifier changes.
 def strip_injection(s):
     s = re.sub(r'__cuShareIntoView=\(\)=>\{.*?/\*__cuShareInto\*/,', '', s, count=1, flags=re.DOTALL)
-    s = re.sub(r'(?:K|ge)\.push\(\{id:[`"]cuShareInto[`"].*?\}\);',   '', s, count=1, flags=re.DOTALL)
+    s = re.sub(r'(?:K|ge|H)\.push\(\{id:[`"]cuShareInto[`"].*?\}\);',   '', s, count=1, flags=re.DOTALL)
     s = re.sub(r',\w+===[`"]cuShareInto[`"]&&.*?\(__cuShareIntoView,\{\}\)', '', s, count=1, flags=re.DOTALL)
     return s
 
